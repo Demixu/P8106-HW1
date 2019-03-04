@@ -1,0 +1,90 @@
+---
+title: "p8106-hw1"
+author: "Jingyu Xu"
+date: "3/2/2019"
+output: html_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(ISLR)
+library(glmnet)
+library(caret)
+library(corrplot)
+library(plotmo)
+```
+
+
+(a)  Fit a linear model using least squares on the training data and calculate the meansquare error using the test data.
+(b)  Fit a ridge regression model on the training data, withλchosen by cross-validation.Report the test error.
+(c)  Fit a lasso model on the training data, withλchosen by cross-validation.  Report thetest error, along with the number of non-zero coefficient estimates.
+(d)  Fit a PCR model on the training data, withMchosen by cross-validation.  Reportthe test error, along with the value ofMselected by cross-validation.
+(e)  Briefly discuss the results obtained in (a)∼(d).
+```{r}
+#import the data 
+test=read.csv(file = "./solubility_test.csv")%>%
+  janitor::clean_names()
+train=read.csv(file="./solubility_train.csv")%>%
+  janitor::clean_names()
+```
+
+a)
+```{r}
+fit_ls = lm(solubility~., data = test)
+test_ls= modelr::add_predictions(test,fit_ls)%>%
+  mutate(error = pred - solubility)
+  
+```
+b)Ridge model
+```{r}
+data(train)
+# delete rows containing the missing data
+test <- na.omit(train)
+# matrix of predictors (glmnet uses input matrix)
+x <- model.matrix(solubility~.,train)[,-1]
+# vector of response
+y <- train$solubility
+```
+
+```{r}
+# fit the ridge regression (alpha = 0) with a sequence of lambdas
+ridge.mod <- glmnet(x, y, alpha=0, lambda = exp(seq(-1, 10, length=200)))
+```
+`coef(ridge.mod)` gives the coefficient matrix. Each column is the fit corresponding to one lambda value.
+```{r}
+mat.coef <- coef(ridge.mod)
+dim(mat.coef)
+```
+
+### Cross-validation
+We use cross-validation to determine the optimal value of lambda. The two vertical lines are the for minimal MSE and 1SE rule. The 1SE rule gives the model with fewest coefficients that's less than one SE away from the sub-model with the lowest error.
+```{r}
+set.seed(2)
+cv.ridge <- cv.glmnet(x, y, 
+                      alpha = 0, 
+                      lambda = exp(seq(-1, 10, length=100)), 
+                      type.measure = "mse")
+
+plot(cv.ridge)
+```
+
+### Trace plot
+There are two functions for generating the trace plot.
+```{r}
+plot(ridge.mod, xvar = "lambda", label = TRUE)
+plot_glmnet(ridge.mod, xvar = "rlambda")
+```
+
+### Coefficients of the final model
+Get the coefficients of the optimal model. `s` is value of the penalty parameter `lambda` at which predictions are required.
+```{r}
+best.lambda <- cv.ridge$lambda.min
+best.lambda
+
+summary(ridge.mod, s = best.lambda, type="coefficients")
+```
+
